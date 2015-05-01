@@ -46,8 +46,8 @@ while ans:
     print("""
     1. Reserve Room
     2. Cancel Reservation
-    3. Reserve Service
-    4. Cancel Service
+    3. Reserve Spa Service
+    4. Cancel Spa Service
     5. Exit
     """)
     ans=input("What would you like to do? ")
@@ -287,17 +287,267 @@ while ans:
       conn.commit()
 
     elif ans=="3":
-      print("\n What type of service would you like to reserve?")
+
+        print("What type of service would you like to reserve?")
+
+        try:
+            cursor4=conn.cursor()
+            print ("The following services are available")
+            print ("SpaID\t\tService\t\t\t\tPrice Per Minute")
+            cursor4.execute ("SELECT SpaID, SpaService, PricePerMinute FROM t_spaservice;")
+
+            while(1):
+
+                row=cursor4.fetchone()
+                if row==None:
+                    break
+
+                else:
+                    print ('{:<10} {:<20} {:^30}'.format(row[0], row[1], row[2]))
+
+            spaSelect=input("Select the SpaID you would like to reserve (select 0 to exit) ")
+            if spaSelect == 0:
+                break
+
+            else:
+                stop2 = 1
+
+                while(1):
+
+                    if stop2 == 0:
+                      break
+
+                    try:
+                        cursor5=conn.cursor()
+                        cursor5.execute ("""
+                        SELECT Capacity, PricePerMinute, Available30, Available60, Available90 FROM t_spaservice
+                        WHERE t_spaservice.SpaID=%s;
+                        """, (spaSelect))
+
+                        row=cursor5.fetchone()
+                        if row==None:
+                            print("There is no spa service matching that ID.")
+
+                        else:
+
+                            print("Please enter the duration or your spa service in minutes from the options below:")
+                            if row[2] == 1:
+                                print("30")
+                            if row[3] == 1:
+                                print("60")
+                            if row[4] == 1:
+                                print("90")
+
+                            spaDuration= int(input())
+                            spaCharge = float(spaDuration) * row[1]
+
+                            if ((row[2] == 1) & (spaDuration == 30)) | ((row[3] == 1) & (spaDuration == 60)) | ((row[4] == 1) & (spaDuration == 90)):
+
+                                spaInTime=input("What time and date would you like the spa service? HH:MM MM-DD-YY " )
+
+                                formatter_string2="%I:%M %m-%d-%y"
+
+                                spaTimeIN = datetime.strptime(spaInTime, formatter_string2)
+
+                                spaTimeIN_object = datetime
+                                spaTimeOUT_object = datetime
+
+                                if spaTimeIN.hour < 8:
+                                    spaTimeIN_object = spaTimeIN + timedelta(0,0,0,0,0,12,0)
+                                    spaTimeOUT_object = spaTimeIN_object + timedelta(0,0,0,0,spaDuration,0,0)
+
+                                else:
+                                    spaTimeIN_object = spaTimeIN
+                                    spaTimeOUT_object = spaTimeIN_object + timedelta(0,0,0,0,spaDuration,0,0)
+
+                                print ('spaTimeIN_object =', spaTimeIN_object)
+                                print ('spaTimeOUT_object =', spaTimeOUT_object)
+
+                                guestName=input("What is the guests name? " )
+
+                                roomNumCheck = input("What is the guest's room number? " )
+                                roomNum2 = int(roomNumCheck)
+
+                                spaDate = spaTimeIN_object.date()
+
+                                reserveSpa = 1
+
+                                try:
+                                    cursor9=conn.cursor()
+
+                                    cursor9.execute ("""
+                                    SELECT RoomID FROM t_roomguest
+                                    WHERE Canceled = 0 AND RoomID = %s
+                                    AND ((CheckIn < %s AND CheckOut > %s)
+                                    OR (CheckIn = %s) OR (CheckOut = %s));""", (roomNum2, spaDate, spaDate, spaDate, spaDate))
+
+                                    #     ("""
+                                    # SELECT RoomID FROM t_roomguest
+                                    # WHERE t_roomguest.RoomID = %s;
+                                    # """, (roomNum))
+
+                                    #, spaDate, spaDate
+                                    # AND t_roomguest.CheckIn =< %s AND t_roomguest.CheckOut >= %s;
+                                    row4=cursor9.fetchone()
+                                    print("room check")
+
+                                    if row4==None:
+
+                                        reserveSpa = 0
+                                        stop2 = 0
+                                        print("Only guests at the resort may schedule services")
+                                        break
+
+                                except MySQLdb.Error:
+                                    print ("Error connecting to MySQL BUT WHY?")
+                                    sys.exit(1)
+                                cursor9.close()
+
+                                try:
+                                    cursor6=conn.cursor()
+                                    cursor6.execute ("""
+                                    SELECT SpaID, StartTime, EndTime, GuestName FROM t_spaguest
+                                    WHERE t_spaguest.SpaID = %s AND t_spaguest.StartTime < %s AND t_spaguest.EndTime > %s;
+                                    """, (spaSelect, spaTimeOUT_object, spaTimeIN_object))
+
+                                    count2=0
+                                    print('spa conflict check')
+                                    while(1):
+                                        row2=cursor6.fetchone()
+
+                                        print("count2 = ", count2)
+
+                                        if row2==None:
+                                            break
+
+                                        elif guestName == row2[3]:
+                                            print("The guest has a conflicting spa reservation SpaID: ", row[0], "Start Time ", row[1], "End Time: ", row[2])
+                                            reserveSpa = 0
+                                            stop2 = 0
+
+                                        elif count2 >= (row[0] - 1):
+                                            print("That service has no reservations available at that time")
+                                            reserveSpa = 0
+                                            stop2 = 0
+
+                                        else:
+                                            count2 += 1
+
+
+                                except MySQLdb.Error:
+                                    print ("Error connecting to MySQL")
+                                    sys.exit(1)
+                                cursor6.close()
+
+                                if spaSelect == '1':
+
+                                    bathBuffIN = spaTimeIN_object + timedelta(0,0,0,0,1,-2,0)
+                                    bathBuffOUT = spaTimeOUT_object + timedelta(0,0,0,0,-1,2,0)
+
+                                    try:
+
+                                        cursor7=conn.cursor()
+                                        cursor7.execute ("""
+                                        SELECT SpaID FROM t_spaguest
+                                        WHERE t_spaguest.SpaID = 1 AND GuestName = %s AND t_spaguest.StartTime < %s AND t_spaguest.EndTime > %s;
+                                        """, (guestName, bathBuffOUT, bathBuffIN))
+
+                                        row3=cursor7.fetchone()
+                                        print("bath check")
+
+                                        if row3==None:
+
+                                            break
+
+                                        else:
+                                            reserveSpa = 0
+                                            stop2 = 0
+                                            print("You cannot schedule mineral baths within two hours of one another")
+
+                                    except MySQLdb.Error:
+                                        print ("Error connecting to MySQL")
+                                        sys.exit(1)
+                                    cursor7.close()
+
+                                if reserveSpa == 1:
+
+
+                                    try:
+
+                                        cursor8=conn.cursor()
+                                        cursor8.execute ("""
+                                        INSERT INTO t_spaguest (SpaID, StartTime, EndTime, SpaInvoice, AdminID, GuestName)
+                                        VALUES (%s, %s, %s, %s, %s, %s);
+                                        """, (spaSelect, spaTimeIN_object, spaTimeOUT_object, spaCharge, admin, guestName))
+                                        conn.commit()
+                                        print ("One row inserted")
+                                        stop2 = 0
+
+                                    except MySQLdb.Error:
+                                        print ("Error connecting to MySQL")
+                                        sys.exit(1)
+                                    cursor8.close()
+
+
+                            else:
+                                print("Not a valid duration please try again")
+
+
+                    except MySQLdb.Error:
+                        print ("Error connecting to MySQL")
+                        sys.exit(1)
+                    cursor5.close()
+
+
+        except MySQLdb.Error:
+            print ("Error connecting to MySQL")
+            sys.exit(1)
+        cursor4.close()
 
     elif ans=="4":
-      print("\n What is the reservation number?")
+
+        guestName=input("What is the guests name? " )
+        spaInTime=input("What is the time and date of the spa service reservation? HH:MM MM-DD-YY " )
+        formatter_string2="%I:%M %m-%d-%y"
+        spaTimeIN = datetime.strptime(spaInTime, formatter_string2)
+        spaTimeIN_object = datetime
+
+        if spaTimeIN.hour < 8:
+            spaTimeIN_object = spaTimeIN + timedelta(0,0,0,0,0,12,0)
+
+        else:
+            spaTimeIN_object = spaTimeIN
+
+        print(spaTimeIN_object)
+        cursor=conn.cursor()
+        cursor.execute ("SELECT GuestID, SpaInvoice, StartTime, ReservationTime FROM t_spaguest WHERE Canceled = 0 AND GuestName = %s AND StartTime = %s", (guestName, spaTimeIN_object))
+        row=cursor.fetchone()
+
+        if row==None:
+
+            print ("No spa reservation found with that information")
+
+        else:
+            today = datetime.today()
+            refund = 0
+
+            if (today + timedelta(0,0,0,0,90,0,0)) < row[2]:
+                refund = 1
+            elif (row[3] + timedelta(0,0,0,0,10,0,0)) > today:
+                refund = 1
+            else:
+                refund = 0
+
+            spaRefund = row[1] * refund
+            cursor.execute ("UPDATE t_spaguest SET SpaRefund = %s, Canceled = 1 WHERE Canceled = 0 AND GuestName = %s AND StartTime = %s", (spaRefund, guestName, spaTimeIN_object))
+            print ("Spa Reservation canceled. Refund is ", spaRefund)
+
+        cursor.close()
+        conn.commit()
 
     elif ans=="5":
       print("\n Goodbye")
-      conn.close()
-      ans = None
-    else:
-       print("\n Not valid choice try again")
+      break
 
        
-    
+
