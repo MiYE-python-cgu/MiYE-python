@@ -506,7 +506,7 @@ while ans:
 
     elif ans=="4":
 
-        guestName=input("What is the guests name? " )
+        guestName=input("What is the guest's name? " )
         spaInTime=input("What is the time and date of the spa service reservation? HH:MM MM-DD-YY " )
         formatter_string2="%I:%M %m-%d-%y"
         spaTimeIN = datetime.strptime(spaInTime, formatter_string2)
